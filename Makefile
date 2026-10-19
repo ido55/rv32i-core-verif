@@ -6,9 +6,13 @@ PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 IMAGE  ?= rv32i-core-verif
 
 # Verilator lint units: each top-level module with the files it needs (packages first).
-LINT_alu     := rtl/rv32i_pkg.sv rtl/alu.sv
-LINT_regfile := rtl/regfile.sv
-LINT_TOPS    := alu regfile
+CORE_SINGLE_SRCS := rtl/rv32i_pkg.sv rtl/alu.sv rtl/regfile.sv rtl/decoder.sv \
+                    rtl/branch_unit.sv rtl/lsu.sv rtl/core_single.sv
+LINT_alu         := rtl/rv32i_pkg.sv rtl/alu.sv
+LINT_regfile     := rtl/regfile.sv
+LINT_core_single := $(CORE_SINGLE_SRCS)
+LINT_tb_top      := $(CORE_SINGLE_SRCS) tb/tb_top.sv
+LINT_TOPS        := alu regfile core_single tb_top
 
 .PHONY: help venv lint lint-py lint-rtl format test test-model test-rtl docker-test clean
 

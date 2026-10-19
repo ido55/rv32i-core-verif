@@ -41,6 +41,14 @@ make docker-test                 # docker build + run `make lint test` in the im
 make clean
 ```
 
+## Core-level tests
+- `tb/harness.py:CoreHarness`: `load(program, data)` writes the same image to imem, dmem and the ISS;
+  `run()` samples the retire port on each FALLING edge, steps the ISS, and compares; at halt it
+  compares all registers and all of dmem. Use `read_reg(n)` for hand-computed expectations.
+- The retire-port fields and conventions are defined once, in `model/iss.py:Retire`; the RTL must match.
+- Memory map: 16 KiB imem + 16 KiB dmem at 0x0000; code at 0, test data at 0x2000. `mem_fault`
+  in tb_top flags any fetch/load/store outside that range or misaligned.
+
 ## Adding an RTL module
 1. Add `rtl/<top>.sv`; add `LINT_<top>` (files, packages first) and the name to `LINT_TOPS` in the Makefile.
 2. Add `tests/rtl/test_<top>.py` with `@cocotb.test()` coroutines plus a pytest function

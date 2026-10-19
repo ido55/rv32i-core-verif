@@ -11,16 +11,16 @@ from pathlib import Path
 from cocotb.runner import get_runner
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-RTL_DIR = REPO_ROOT / "rtl"
 
 
 def run_cocotb(toplevel: str, sources: list[str], test_module: str) -> None:
+    """`sources` are paths relative to the repo root, packages first."""
     build_dir = REPO_ROOT / "sim_build" / toplevel
     waves = os.environ.get("WAVES") == "1"
 
     runner = get_runner("verilator")
     runner.build(
-        sources=[RTL_DIR / name for name in sources],
+        sources=[REPO_ROOT / name for name in sources],
         hdl_toplevel=toplevel,
         build_dir=build_dir,
         build_args=["-Wall"],  # lint warnings fail the build, same as `make lint`
