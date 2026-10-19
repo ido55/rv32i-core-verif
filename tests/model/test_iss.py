@@ -173,8 +173,12 @@ def _iss_with_data(program: list[int], word: int) -> Iss:
 )
 def test_loads(name, offset, expected):
     iss = _iss_with_data([e(name, rd=2, rs1=1, imm=offset)], 0x8081_8283)
-    iss.run()
+    retire = iss.step()
     assert iss.regs[2] == expected
+    width = {"lw": 4, "lh": 2, "lhu": 2}.get(name, 1)
+    assert retire.mem_addr == DATA  # word-aligned
+    assert retire.mem_rmask == ((1 << width) - 1) << offset
+    assert retire.mem_wmask == 0
 
 
 def test_load_with_negative_offset():
@@ -201,6 +205,7 @@ def test_stores(name, offset, mask, lane_data, memory_after):
     retire = iss.step()
     assert (retire.mem_addr, retire.mem_wmask, retire.mem_wdata) == (DATA, mask, lane_data)
     assert retire.rd == 0
+    assert retire.mem_rmask == 0
     assert iss.mem.load(DATA, 4) == memory_after
 
 

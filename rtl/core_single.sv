@@ -30,7 +30,8 @@ module core_single
   output logic [31:0] rvfi_next_pc,
   output logic [4:0]  rvfi_rd,        // 0 if no register is written
   output logic [31:0] rvfi_rd_wdata,  // 0 if no register is written
-  output logic [31:0] rvfi_mem_addr,  // stores only, else 0
+  output logic [31:0] rvfi_mem_addr,  // loads and stores (word-aligned), else 0
+  output logic [3:0]  rvfi_mem_rmask, // loads only, else 0
   output logic [31:0] rvfi_mem_wdata, // stores only, else 0
   output logic [3:0]  rvfi_mem_wmask, // stores only, else 0
   output logic        rvfi_halt,
@@ -46,7 +47,7 @@ module core_single
   logic [31:0] alu_a, alu_b, alu_y;
   logic        branch_taken;
   logic [31:0] pc_plus4, pc_target, pc_next;
-  logic [3:0]  store_mask;
+  logic [3:0]  byte_mask;
   logic [31:0] load_data, rd_wdata;
 
   assign active = rst_n && !halted_q;
@@ -114,14 +115,14 @@ module core_single
     .byte_offset (alu_y[1:0]),
     .store_data  (rs2_data),
     .mem_rdata   (dmem_rdata),
-    .store_mask  (store_mask),
+    .byte_mask   (byte_mask),
     .store_wdata (dmem_wdata),
     .load_data   (load_data)
   );
 
   assign dmem_addr  = {alu_y[31:2], 2'b00};
   assign dmem_re    = active && ctrl.mem_read;
-  assign dmem_wmask = (active && ctrl.mem_write) ? store_mask : 4'b0000;
+  assign dmem_wmask = (active && ctrl.mem_write) ? byte_mask : 4'b0000;
 
   // ---- Write back --------------------------------------------------------------------
   always_comb begin
@@ -155,9 +156,10 @@ module core_single
   assign rvfi_next_pc   = pc_next;
   assign rvfi_rd        = writes_rd ? ctrl.rd : 5'd0;
   assign rvfi_rd_wdata  = writes_rd ? rd_wdata : 32'b0;
-  assign rvfi_mem_addr  = ctrl.mem_write ? dmem_addr : 32'b0;
+  assign rvfi_mem_addr  = (ctrl.mem_read || ctrl.mem_write) ? dmem_addr : 32'b0;
+  assign rvfi_mem_rmask = ctrl.mem_read  ? byte_mask  : 4'b0000;
   assign rvfi_mem_wdata = ctrl.mem_write ? dmem_wdata : 32'b0;
-  assign rvfi_mem_wmask = ctrl.mem_write ? store_mask : 4'b0000;
+  assign rvfi_mem_wmask = ctrl.mem_write ? byte_mask  : 4'b0000;
   assign rvfi_halt      = ctrl.halt;
   assign rvfi_trap      = ctrl.illegal;
 

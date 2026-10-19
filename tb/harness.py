@@ -43,6 +43,8 @@ def format_retire(r: Retire) -> str:
     text = f"pc=0x{r.pc:08x}  {disasm(r.insn):<28}"
     if r.rd:
         text += f" x{r.rd}=0x{r.rd_wdata:08x}"
+    if r.mem_rmask:
+        text += f" load mem[0x{r.mem_addr:08x}] mask={r.mem_rmask:04b}"
     if r.mem_wmask:
         text += f" mem[0x{r.mem_addr:08x}]=0x{r.mem_wdata:08x} mask={r.mem_wmask:04b}"
     return text
@@ -147,6 +149,7 @@ class CoreHarness:
             rd=int(d.rvfi_rd.value),
             rd_wdata=int(d.rvfi_rd_wdata.value),
             mem_addr=int(d.rvfi_mem_addr.value),
+            mem_rmask=int(d.rvfi_mem_rmask.value),
             mem_wdata=int(d.rvfi_mem_wdata.value),
             mem_wmask=int(d.rvfi_mem_wmask.value),
             halt=bool(d.rvfi_halt.value),

@@ -56,8 +56,10 @@ class Retire:
 
     Conventions (same as the RISC-V Formal Interface):
     - rd = 0 and rd_wdata = 0 when the instruction writes no register (or writes x0).
-    - mem_wmask = 0 when it does not store. For stores, mem_addr is word-aligned and
-      mem_wdata holds the data already shifted into its byte lanes, as on the memory bus.
+    - mem_addr is the word-aligned address of a load or store, else 0.
+    - mem_rmask / mem_wmask are the bytes read / written (bit i = byte lane i), else 0.
+    - For stores, mem_wdata holds the data already shifted into its byte lanes, as on the
+      memory bus; else 0.
     """
 
     pc: int
@@ -66,6 +68,7 @@ class Retire:
     rd: int = 0
     rd_wdata: int = 0
     mem_addr: int = 0
+    mem_rmask: int = 0
     mem_wdata: int = 0
     mem_wmask: int = 0
     halt: bool = False
@@ -113,7 +116,7 @@ class Iss:
 
         next_pc = to_u32(pc + 4)
         result = None  # value written to rd, if any
-        mem_addr = mem_wdata = mem_wmask = 0
+        mem_addr = mem_rmask = mem_wdata = mem_wmask = 0
         halt = False
 
         if i.name in ALU_OPS:
@@ -138,6 +141,9 @@ class Iss:
             if addr % nbytes:
                 raise MisalignedAccess(f"{i.name} at 0x{addr:08x}")
             result = self.mem.load(addr, nbytes, signed)
+            lane = addr % 4
+            mem_addr = addr - lane
+            mem_rmask = ((1 << nbytes) - 1) << lane
         elif i.name in STORES:
             nbytes = STORES[i.name]
             addr = to_u32(rs1 + i.imm)
@@ -164,7 +170,9 @@ class Iss:
 
         self.pc = next_pc
         self.halted = halt
-        return Retire(pc, insn, next_pc, rd, rd_wdata, mem_addr, mem_wdata, mem_wmask, halt)
+        return Retire(
+            pc, insn, next_pc, rd, rd_wdata, mem_addr, mem_rmask, mem_wdata, mem_wmask, halt
+        )
 
     def run(self, max_steps: int = 100_000) -> list[Retire]:
         """Step until ECALL/EBREAK; returns the full retire trace."""
