@@ -9,7 +9,7 @@ module lsu
   input  logic [1:0]  byte_offset,  // addr[1:0]
   input  logic [31:0] store_data,   // rs2
   input  logic [31:0] mem_rdata,    // word read from data memory
-  output logic [3:0]  store_mask,   // byte enables (before gating with mem_write)
+  output logic [3:0]  byte_mask,    // bytes accessed (store byte enables / load read mask)
   output logic [31:0] store_wdata,  // data in its byte lanes
   output logic [31:0] load_data     // value written to rd
 );
@@ -22,10 +22,10 @@ module lsu
 
   always_comb begin
     unique case (funct3)
-      F3_B:    store_mask = 4'b0001 << byte_offset;
-      F3_H:    store_mask = 4'b0011 << byte_offset;
-      F3_W:    store_mask = 4'b1111;
-      default: store_mask = 4'b0000;
+      F3_B, F3_BU: byte_mask = 4'b0001 << byte_offset;
+      F3_H, F3_HU: byte_mask = 4'b0011 << byte_offset;
+      F3_W:        byte_mask = 4'b1111;
+      default:     byte_mask = 4'b0000;
     endcase
   end
 

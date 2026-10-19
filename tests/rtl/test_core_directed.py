@@ -12,7 +12,8 @@ import cocotb
 
 from model.encoder import encode as e
 from model.encoder import load_immediate as li
-from tb.harness import CORE_SINGLE_SOURCES, CoreHarness
+from tb.coverage import Coverage
+from tb.harness import CORE_SINGLE_SOURCES, COVERAGE_DIR, CoreHarness
 
 from cocotb_runner import run_cocotb
 
@@ -280,10 +281,14 @@ CASES.append(
 # ---- One cocotb test per case ------------------------------------------------------------
 
 
+COVERAGE = Coverage()
+
+
 async def run_case(dut, case: Case) -> None:
-    harness = CoreHarness(dut)
+    harness = CoreHarness(dut, COVERAGE)
     harness.load(case.program, case.data)
     result = await harness.run(expect_trap=case.expect_trap)
+    COVERAGE.save(COVERAGE_DIR / "directed.json")
     for reg, value in case.expect.items():
         got = harness.read_reg(reg)
         assert got == value, f"x{reg} = 0x{got:08x}, expected 0x{value:08x}"

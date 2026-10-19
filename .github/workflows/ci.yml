@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true  # third_party/riscv-tests
 
       - name: Install toolchain (same apt packages as the Dockerfile)
         run: |
@@ -41,6 +43,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          submodules: true  # third_party/riscv-tests is copied into the image
 
       - name: Build image
         run: docker build -t rv32i-core-verif .

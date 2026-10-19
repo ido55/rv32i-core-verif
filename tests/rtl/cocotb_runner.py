@@ -31,6 +31,6 @@ def run_cocotb(toplevel: str, sources: list[str], test_module: str) -> None:
         test_module=test_module,
         build_dir=build_dir,
         test_dir=build_dir,
-        seed=int(os.environ.get("SEED", "1")),
+        seed=int(os.environ.get("SEED") or 1),  # `or`: make exports unset vars as ""
         waves=waves,
     )
