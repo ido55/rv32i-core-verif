@@ -1,6 +1,7 @@
 # Build, lint and test entry points. `make help` lists them.
 
 VENV   ?= .venv
+export SEEDS SEED_START SEED WAVES  # pass test knobs given on the make command line to pytest
 # Use the project venv if it exists (local dev), otherwise python3 on PATH (Docker, CI).
 PYTHON ?= $(if $(wildcard $(VENV)/bin/python),$(VENV)/bin/python,python3)
 IMAGE  ?= rv32i-core-verif
@@ -14,7 +15,8 @@ LINT_core_single := $(CORE_SINGLE_SRCS)
 LINT_tb_top      := $(CORE_SINGLE_SRCS) tb/tb_top.sv
 LINT_TOPS        := alu regfile core_single tb_top
 
-.PHONY: help venv lint lint-py lint-rtl format test test-model test-rtl docker-test clean
+.PHONY: help venv lint lint-py lint-rtl format test test-model test-rtl test-random coverage \
+        docker-test clean
 
 help:
 	@echo "make venv         create .venv and install pinned Python deps"
@@ -23,6 +25,8 @@ help:
 	@echo "make test         golden-model tests + RTL tests"
 	@echo "make test-model   pytest on the Python golden model"
 	@echo "make test-rtl     cocotb + Verilator tests (SEED=<n>, WAVES=1)"
+	@echo "make test-random  random programs only (SEEDS=<count> SEED_START=<first seed>)"
+	@echo "make coverage     functional coverage report from the last test run"
 	@echo "make docker-test  build the Docker image and run lint + tests in it"
 	@echo "make clean        remove build output"
 
@@ -54,6 +58,13 @@ test-model:
 
 test-rtl:
 	$(PYTHON) -m pytest tests/rtl
+
+# SEEDS / SEED_START are read from the environment by tests/rtl/test_core_random.py.
+test-random:
+	$(PYTHON) -m pytest tests/rtl/test_core_random.py
+
+coverage:
+	$(PYTHON) -m tb.coverage_report
 
 docker-test:
 	docker build -t $(IMAGE) .
