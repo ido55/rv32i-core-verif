@@ -3,6 +3,7 @@
 import pytest
 
 from model.encoder import encode as e
+from model.encoder import load_immediate
 from model.isa import SPEC_BY_NAME, Fmt
 from model.iss import Iss, Memory, MemoryAccessError, MisalignedAccess
 
@@ -242,6 +243,21 @@ def test_run_without_halt_raises():
     mem.load_words([e("jal", imm=0)], 0)  # jump-to-self forever
     with pytest.raises(RuntimeError):
         Iss(mem).run(max_steps=100)
+
+
+# ---- load_immediate (li pseudo-instruction) --------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "value",
+    [0, 1, -1, 2047, 2048, -2048, -2049, 0x800, 0xFFF, 0x1000, 0x7FFF_FFFF, 0x8000_0000,
+     0x8000_0800, 0xFFFF_F800, 0xFFFF_F7FF, 0x1234_5678, 0xDEAD_BEEF],
+)  # fmt: skip
+def test_load_immediate(value):
+    program = load_immediate(5, value)
+    iss = run(program)
+    assert iss.regs[5] == value & 0xFFFF_FFFF
+    assert len(program) <= 2
 
 
 # ---- A small program --------------------------------------------------------------------

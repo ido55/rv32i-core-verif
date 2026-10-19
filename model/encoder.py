@@ -14,6 +14,8 @@ from model.isa import (
     SHIFT_IMM_NAMES,
     SPEC_BY_NAME,
     Fmt,
+    sign_extend,
+    to_u32,
 )
 
 
@@ -96,3 +98,20 @@ def encode(name: str, rd: int = 0, rs1: int = 0, rs2: int = 0, imm: int = 0) -> 
 
     # Fmt.SYS: fixed words, operands are ignored.
     return {"fence": FENCE_WORD, "ecall": ECALL_WORD, "ebreak": EBREAK_WORD}[name]
+
+
+def load_immediate(rd: int, value: int) -> list[int]:
+    """The `li rd, value` pseudo-instruction: LUI + ADDI, or a single ADDI if it fits.
+
+    ADDI sign-extends its 12-bit immediate, so if bit 11 of `value` is set the low
+    part is negative and the upper part must be rounded up by one to compensate.
+    """
+    value = to_u32(value)
+    low = sign_extend(value & 0xFFF, 12)
+    high = to_u32(value - low) >> 12
+    if high == 0:
+        return [encode("addi", rd=rd, imm=low)]
+    words = [encode("lui", rd=rd, imm=high)]
+    if low != 0:
+        words.append(encode("addi", rd=rd, rs1=rd, imm=low))
+    return words
