@@ -60,4 +60,4 @@ async def alu_unused_op_codes_output_zero(dut):
 
 
 def test_alu_rtl():
-    run_cocotb("alu", ["rv32i_pkg.sv", "alu.sv"], "test_alu")
+    run_cocotb("alu", ["rtl/rv32i_pkg.sv", "rtl/alu.sv"], "test_alu")

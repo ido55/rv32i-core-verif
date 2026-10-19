@@ -22,5 +22,5 @@ extend-exclude = ["sim_build", "build"]
 select = ["E", "F", "W", "I", "B", "UP", "SIM"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["model"]
+known-first-party = ["model", "tb"]
 known-local-folder = ["cocotb_runner"]  # tests/rtl helper, imported by the cocotb test modules

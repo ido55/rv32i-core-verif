@@ -100,4 +100,4 @@ async def random_reads_and_writes(dut):
 
 
 def test_regfile_rtl():
-    run_cocotb("regfile", ["regfile.sv"], "test_regfile")
+    run_cocotb("regfile", ["rtl/regfile.sv"], "test_regfile")
