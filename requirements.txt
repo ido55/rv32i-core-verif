@@ -1,0 +1,8 @@
+# Pinned so local, Docker and CI runs are identical.
+# cocotb: Python testbench framework driving Verilator. Pinned to 1.9.x because
+#         cocotb 2.x requires Verilator >= 5.036 and Ubuntu 24.04 ships 5.020.
+cocotb==1.9.2
+# pytest: test runner for the golden model, and launcher for the cocotb runs.
+pytest==9.1.1
+# ruff: Python linter + formatter in one tool (replaces flake8 + isort + black).
+ruff==0.17.1

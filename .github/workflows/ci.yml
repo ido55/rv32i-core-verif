@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint + tests (Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install toolchain (same apt packages as the Dockerfile)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            verilator gcc-riscv64-unknown-elf binutils-riscv64-unknown-elf
+
+      - name: Show tool versions
+        run: |
+          python3 --version
+          verilator --version
+          riscv64-unknown-elf-gcc --version | head -1
+
+      - name: Create venv with pinned Python deps
+        run: make venv
+
+      - name: Lint (ruff + verilator -Wall)
+        run: make lint
+
+      - name: Tests (golden model + RTL)
+        run: make test
+
+  docker:
+    name: Docker image reproduces results
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build image
+        run: docker build -t rv32i-core-verif .
+
+      - name: Run lint + tests inside the image
+        run: docker run --rm rv32i-core-verif
