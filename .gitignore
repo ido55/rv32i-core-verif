@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+*.egg-info/
+
+# Simulation / cocotb / Verilator build output
+sim_build/
+obj_dir/
+results.xml
+*.vcd
+*.fst
+*.ghw
+
+# Generated test programs and reports
+build/
+*.elf
+*.bin
+*.hex
+coverage*.yml
+coverage*.json
+
+# Synthesis output
+synth/out/
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
