@@ -6,7 +6,7 @@ A 5-stage pipelined RV32I CPU in SystemVerilog, verified against a Python golden
 using cocotb + Verilator (directed tests, constrained-random streams, scoreboard,
 functional coverage).
 
-> **Status:** Milestone 1 of 5 (golden model, ALU, register file, CI). See [ROADMAP.md](ROADMAP.md).
+> **Status:** Milestone 2 of 5 (single-cycle core + scoreboard). See [ROADMAP.md](ROADMAP.md).
 > Results are added here only once measured, together with the command that produced them.
 
 ## Quick start
@@ -33,19 +33,44 @@ make test-rtl SEED=42 WAVES=1   # different random seed, dump waveforms to sim_b
 | Path | Contents |
 |---|---|
 | `model/` | Python golden model: instruction table, encoder/decoder, reference ALU, ISS |
-| `rtl/` | SystemVerilog: `rv32i_pkg`, `alu`, `regfile` (cores arrive in M2 and M4) |
+| `rtl/` | SystemVerilog: `rv32i_pkg`, `alu`, `regfile`, `decoder`, `branch_unit`, `lsu`, `core_single` |
+| `tb/` | `tb_top.sv` (core + 16 KiB instruction and data memories) and `harness.py` (scoreboard) |
 | `tests/model/` | pytest for the golden model, incl. an encoder cross-check against GNU `as` |
 | `tests/rtl/` | cocotb testbenches, launched from pytest via the cocotb runner |
 
-## Current verification status (M1)
+## How the core is checked
+
+```mermaid
+flowchart LR
+    P[program words] --> IM[imem / dmem<br/>tb_top.sv] --> C[core_single.sv]
+    P --> ISS[Python ISS<br/>model/iss.py]
+    C -- retire port, every instruction --> SB{scoreboard<br/>tb/harness.py}
+    ISS -- Iss.step&#40;&#41; Retire record --> SB
+    SB -- at halt --> F[compare all 31 registers<br/>and all of data memory]
+```
+
+The core reports every instruction it completes on a **retire port** (pc, instruction,
+next pc, register written, store address/data/byte mask), modelled on the RISC-V Formal
+Interface. The testbench steps the ISS once per retired instruction and compares the two
+records, so a bug is reported at the exact instruction where the core and model first
+disagree, with the preceding instructions as context. For example, with LB deliberately
+broken to zero-extend:
+
+```
+ScoreboardMismatch: retire #1 mismatch at pc=0x00000004: lb x10, 0(x1)
+  rd_wdata   core=0x00000083  model=0xffffff83
+```
+
+## Current verification status (M2)
 
 Measured with `make test`:
 
 | Suite | What it checks | Result |
 |---|---|---|
-| `tests/model` | ISS (every RV32I instruction + edge cases), encoder/decoder round trips, 1,600 random instructions vs GNU `as` | 159 / 159 pass |
+| `tests/model` | ISS (every RV32I instruction + edge cases), `li` helper, encoder/decoder round trips, 1,600 random instructions vs GNU `as` | 176 / 176 pass |
 | `tests/rtl/test_alu.py` | all 10 ALU ops: 13×13 edge-value pairs + 1,000 random pairs per op, vs `model/alu.py` | 3 / 3 cocotb tests pass |
 | `tests/rtl/test_regfile.py` | reset, x0 hard-wired, read-during-write, 2,000 cycles of random traffic | 4 / 4 cocotb tests pass |
+| `tests/rtl/test_core_directed.py` | single-cycle core: every RV32I instruction (ALU edge operands, all branch outcomes, every load/store width and byte offset), x0, halt, illegal-instruction trap, 3 small programs | 45 / 45 cocotb tests pass |
 
 ## License
 
