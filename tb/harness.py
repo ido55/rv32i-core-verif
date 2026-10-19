@@ -10,6 +10,7 @@ combinational logic has settled; the instruction then commits on the next rising
 """
 
 from dataclasses import dataclass, fields
+from pathlib import Path
 
 import cocotb
 from cocotb.clock import Clock
@@ -17,7 +18,10 @@ from cocotb.triggers import FallingEdge, RisingEdge
 
 from model.decoder import IllegalInstruction, decode, to_asm
 from model.iss import Iss, Memory, Retire
+from tb.coverage import Coverage
 
+REPO_ROOT = Path(__file__).resolve().parents[1]
+COVERAGE_DIR = REPO_ROOT / "build" / "coverage"  # one JSON file per test suite
 MEM_WORDS = 4096  # must match tb_top's MEM_WORDS parameter
 MEM_BYTES = 4 * MEM_WORDS
 CLOCK_PERIOD_NS = 10
@@ -58,8 +62,9 @@ class RunResult:
 
 
 class CoreHarness:
-    def __init__(self, dut):
+    def __init__(self, dut, coverage: Coverage | None = None):
         self.dut = dut
+        self.coverage = coverage  # sampled on every retired instruction, if given
         self.iss: Iss | None = None
         self._clock_started = False
 
@@ -102,6 +107,8 @@ class CoreHarness:
         assert self.iss is not None, "call load() first"
         dut = self.dut
         await self._reset()
+        if self.coverage:
+            self.coverage.reset_history()
 
         trace: list[Retire] = []
         cycles = 0
@@ -124,6 +131,8 @@ class CoreHarness:
             got = self._read_retire()
             self._check(got, trace)
             trace.append(got)
+            if self.coverage:
+                self.coverage.sample(got)
             if got.halt:
                 break
 
