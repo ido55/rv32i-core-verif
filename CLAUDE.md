@@ -25,5 +25,24 @@ with cocotb + Verilator. See ROADMAP.md for milestones and acceptance criteria.
 - No secrets, large binaries or generated files in git (see .gitignore).
 
 ## Commands
-These are added in Milestone 1. Until then, there is nothing to build.
-<!-- Filled in with exact, tested commands in Milestone 1. -->
+Run from the repo root inside WSL. The Makefile uses `.venv/bin/python` if it exists,
+otherwise `python3` on PATH (Docker/CI).
+
+```bash
+make venv                        # create .venv, install requirements.txt
+make lint                        # ruff check + ruff format --check + verilator --lint-only -Wall per top
+make format                      # ruff format + ruff check --fix
+make test                        # = test-model + test-rtl
+make test-model                  # pytest tests/model
+make test-rtl                    # pytest tests/rtl (cocotb + Verilator, builds into sim_build/<top>/)
+make test-rtl SEED=42 WAVES=1    # other seed; VCD at sim_build/<top>/dump.vcd
+.venv/bin/python -m pytest tests/model/test_iss.py -k jalr   # one test
+make docker-test                 # docker build + run `make lint test` in the image
+make clean
+```
+
+## Adding an RTL module
+1. Add `rtl/<top>.sv`; add `LINT_<top>` (files, packages first) and the name to `LINT_TOPS` in the Makefile.
+2. Add `tests/rtl/test_<top>.py` with `@cocotb.test()` coroutines plus a pytest function
+   calling `run_cocotb("<top>", [files], "test_<top>")`.
+3. cocotb 1.9 under pytest names its results file `sim_build/<top>/<pytest test>.None` (a cocotb quirk; harmless).
