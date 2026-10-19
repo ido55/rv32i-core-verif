@@ -36,6 +36,8 @@ make test                        # = test-model + test-rtl
 make test-model                  # pytest tests/model
 make test-rtl                    # pytest tests/rtl (cocotb + Verilator, builds into sim_build/<top>/)
 make test-rtl SEED=42 WAVES=1    # other seed; VCD at sim_build/<top>/dump.vcd
+make test-random SEEDS=200 SEED_START=1   # random programs; reproduce one: SEED_START=<s> SEEDS=1
+make coverage                    # merge build/coverage/*.json and print tables
 .venv/bin/python -m pytest tests/model/test_iss.py -k jalr   # one test
 make docker-test                 # docker build + run `make lint test` in the image
 make clean
@@ -48,6 +50,11 @@ make clean
 - The retire-port fields and conventions are defined once, in `model/iss.py:Retire`; the RTL must match.
 - Memory map: 16 KiB imem + 16 KiB dmem at 0x0000; code at 0, test data at 0x2000. `mem_fault`
   in tb_top flags any fetch/load/store outside that range or misaligned.
+
+- Programs: `tb/programs.py` builds rv32ui riscv-tests (pass = gp/x3 == 1) and `programs/*.c`
+  (result in a0) with riscv64-unknown-elf-gcc into `build/`. Clone with `--recursive` (submodule).
+- Never modify `third_party/` (vendored; excluded from ruff).
+- Each core-level suite saves coverage to `build/coverage/<suite>.json`.
 
 ## Adding an RTL module
 1. Add `rtl/<top>.sv`; add `LINT_<top>` (files, packages first) and the name to `LINT_TOPS` in the Makefile.
