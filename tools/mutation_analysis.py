@@ -1,20 +1,28 @@
 """Mutation analysis of the pipelined core: are the tests able to find hazard bugs?
 
 Injects one classic pipeline bug at a time into rtl/core_pipe.sv, runs the directed,
-program and random suites on the pipelined core, and counts the failing tests. The file is
-restored after every mutation (also on Ctrl-C).
+program and random suites on the pipelined core, and counts the failing tests. The RTL
+file, and the coverage/CPI data of the last real `make test` (which the mutated runs would
+otherwise overwrite), are restored at the end, also on Ctrl-C.
 
 Usage:  make mutation      (about 4-5 minutes)
 """
 
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 TARGET = REPO_ROOT / "rtl" / "core_pipe.sv"
+# Written by every test run; must not be left holding data from a mutated design.
+PROTECTED_DIRS = [
+    REPO_ROOT / "build" / "coverage" / "pipe",
+    REPO_ROOT / "build" / "results" / "pipe",
+]
 SUITES = ["test_core_directed", "test_core_programs", "test_core_random"]
 
 # (description, exact text in core_pipe.sv, replacement)
@@ -65,6 +73,11 @@ def run_suite(suite: str) -> tuple[int, int]:
 
 def main() -> int:
     original = TARGET.read_text()
+    backup = Path(tempfile.mkdtemp(prefix="mutation_backup_"))
+    for index, directory in enumerate(PROTECTED_DIRS):
+        if directory.exists():
+            shutil.copytree(directory, backup / str(index))
+
     print("| Injected bug | Directed fail | Programs fail | Random fail |")
     print("|---|---|---|---|")
     missed = 0
@@ -78,6 +91,11 @@ def main() -> int:
             print(f"| {name} | {cells} |", flush=True)
     finally:
         TARGET.write_text(original)
+        for index, directory in enumerate(PROTECTED_DIRS):
+            shutil.rmtree(directory, ignore_errors=True)
+            if (backup / str(index)).exists():
+                shutil.copytree(backup / str(index), directory)
+        shutil.rmtree(backup)
     print(f"\nMutations not caught by any suite: {missed} of {len(MUTATIONS)}")
     return 1 if missed else 0
 
