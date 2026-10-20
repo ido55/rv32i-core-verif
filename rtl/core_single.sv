@@ -16,7 +16,6 @@ module core_single
 
   // Data memory (word address + byte enables)
   output logic [31:0] dmem_addr,      // word-aligned
-  output logic        dmem_re,        // load this cycle
   input  logic [31:0] dmem_rdata,
   output logic [3:0]  dmem_wmask,     // non-zero = write these bytes
   output logic [31:0] dmem_wdata,
@@ -51,6 +50,11 @@ module core_single
   logic [31:0] load_data, rd_wdata;
 
   assign active = rst_n && !halted_q;
+
+  // The single-cycle core has no hazards, so it ignores which registers are really read.
+  // (Verilator's lint skips signals whose name contains "unused".)
+  logic unused_ctrl_bits;
+  assign unused_ctrl_bits = ^{ctrl.uses_rs1, ctrl.uses_rs2};
 
   // ---- Fetch and decode -------------------------------------------------------------
   assign imem_addr = pc_q;
@@ -121,7 +125,6 @@ module core_single
   );
 
   assign dmem_addr  = {alu_y[31:2], 2'b00};
-  assign dmem_re    = active && ctrl.mem_read;
   assign dmem_wmask = (active && ctrl.mem_write) ? byte_mask : 4'b0000;
 
   // ---- Write back --------------------------------------------------------------------

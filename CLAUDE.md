@@ -36,8 +36,11 @@ make test                        # = test-model + test-rtl
 make test-model                  # pytest tests/model
 make test-rtl                    # pytest tests/rtl (cocotb + Verilator, builds into sim_build/<top>/)
 make test-rtl SEED=42 WAVES=1    # other seed; VCD at sim_build/<top>/dump.vcd
+make test CORE=pipe              # core-level suites on one core only (default: both)
 make test-random SEEDS=200 SEED_START=1   # random programs; reproduce one: SEED_START=<s> SEEDS=1
-make coverage                    # merge build/coverage/*.json and print tables
+make coverage                    # merge build/coverage/<core>/*.json and print tables
+make cpi                         # CPI table from build/results/<core>/programs.json
+make mutation                    # inject 7 pipeline bugs, count failing tests (~5 min)
 .venv/bin/python -m pytest tests/model/test_iss.py -k jalr   # one test
 make docker-test                 # docker build + run `make lint test` in the image
 make clean
@@ -54,7 +57,14 @@ make clean
 - Programs: `tb/programs.py` builds rv32ui riscv-tests (pass = gp/x3 == 1) and `programs/*.c`
   (result in a0) with riscv64-unknown-elf-gcc into `build/`. Clone with `--recursive` (submodule).
 - Never modify `third_party/` (vendored; excluded from ruff).
-- Each core-level suite saves coverage to `build/coverage/<suite>.json`.
+- Each core-level suite saves coverage to `build/coverage/<core>/<suite>.json`.
+- Two cores, same ports and retire port: `tb_top` instantiates `core_pipe` if built with
+  `-DPIPELINED`, else `core_single`; the instance is `u_core` either way. The runner builds
+  `sim_build/tb_top_<core>/` and passes `+CORE=<core>` (a plusarg, never an env var: cocotb
+  1.9 lets os.environ override extra_env). No generate blocks in tb_top: cocotb 1.9 cannot
+  look inside Verilator 5.020 generate scopes.
+- Pipeline invariant enforced by test_core_programs:
+  `cycles == instructions + 4 + stall_cycles + 2 * (flushes - 1)`.
 
 ## Adding an RTL module
 1. Add `rtl/<top>.sv`; add `LINT_<top>` (files, packages first) and the name to `LINT_TOPS` in the Makefile.

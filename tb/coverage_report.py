@@ -1,30 +1,25 @@
-"""Print functional coverage from build/coverage/*.json as Markdown tables.
+"""Print functional coverage from build/coverage/<core>/*.json as Markdown tables.
 
 Usage (after `make test`):  python -m tb.coverage_report
 """
 
-from tb.coverage import COVERPOINTS, Coverage
+from tb.coverage import Coverage
 from tb.harness import COVERAGE_DIR
 
 
-def main() -> int:
-    files = sorted(COVERAGE_DIR.glob("*.json"))
-    if not files:
-        print(f"no coverage data in {COVERAGE_DIR}; run `make test` first")
-        return 1
-
+def report_core(core: str) -> None:
+    files = sorted((COVERAGE_DIR / core).glob("*.json"))
     suites = {path.stem: Coverage.load(path) for path in files}
-    total = Coverage()
+    total = Coverage(pipelined=core == "pipe")
     for cov in suites.values():
         total.merge(cov)
 
+    print(f"\n### Core: {core}\n")
     print("| Suite | Bins hit | Coverage |")
     print("|---|---|---|")
     for name, cov in suites.items():
-        hit = sum(h for h, _ in cov.summary().values())
-        print(f"| {name} | {hit} / {_total_bins()} | {cov.percent():.1f}% |")
-    hit = sum(h for h, _ in total.summary().values())
-    print(f"| **all suites** | **{hit} / {_total_bins()}** | **{total.percent():.1f}%** |")
+        print(f"| {name} | {_hit(cov)} / {_bins(cov)} | {cov.percent():.1f}% |")
+    print(f"| **all suites** | **{_hit(total)} / {_bins(total)}** | **{total.percent():.1f}%** |")
 
     print("\n| Coverpoint | Bins hit | Coverage |")
     print("|---|---|---|")
@@ -33,11 +28,24 @@ def main() -> int:
 
     missing = total.missing()
     print("\nBins never hit:", ", ".join(missing) if missing else "none")
+
+
+def _hit(cov: Coverage) -> int:
+    return sum(hit for hit, _ in cov.summary().values())
+
+
+def _bins(cov: Coverage) -> int:
+    return sum(count for _, count in cov.summary().values())
+
+
+def main() -> int:
+    cores = sorted(path.name for path in COVERAGE_DIR.glob("*") if path.is_dir())
+    if not cores:
+        print(f"no coverage data in {COVERAGE_DIR}; run `make test` first")
+        return 1
+    for core in cores:
+        report_core(core)
     return 0
-
-
-def _total_bins() -> int:
-    return sum(len(bins) for bins in COVERPOINTS.values())
 
 
 if __name__ == "__main__":

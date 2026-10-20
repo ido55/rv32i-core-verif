@@ -9,13 +9,13 @@ Every test is checked three ways:
 from dataclasses import dataclass, field
 
 import cocotb
+import pytest
 
 from model.encoder import encode as e
 from model.encoder import load_immediate as li
-from tb.coverage import Coverage
-from tb.harness import CORE_SINGLE_SOURCES, COVERAGE_DIR, CoreHarness
+from tb.harness import CORE_SOURCES, CoreHarness, coverage_path, new_coverage
 
-from cocotb_runner import run_cocotb
+from cocotb_runner import cores_under_test, run_cocotb
 
 DATA = 0x2000  # data area, well above the code
 
@@ -278,17 +278,121 @@ CASES.append(
 )
 
 
+# ---- Pipeline hazards (added in M4 after mutation analysis showed directed-test gaps) ----
+# Each case puts the dependent instruction at an exact distance from the producer.
+# On the single-cycle core they are ordinary programs; on core_pipe they hit one hazard path.
+
+NOP = e("addi", rd=0, rs1=0, imm=0)
+
+CASES.append(
+    Case(
+        "hazard_x0_never_forwarded",  # writes to x0 must not be forwarded or bypassed
+        program(
+            e("addi", rd=0, rs1=0, imm=5),
+            e("add", rd=1, rs1=0, rs2=0),  # distance 1 (EX/MEM path)
+            e("addi", rd=0, rs1=0, imm=6),
+            NOP,
+            e("add", rd=2, rs1=0, rs2=0),  # distance 2 (MEM/WB path)
+            e("addi", rd=0, rs1=0, imm=7),
+            NOP,
+            NOP,
+            e("add", rd=3, rs1=0, rs2=0),  # distance 3 (write-before-read in ID)
+            li(5, DATA),
+            e("lw", rd=0, rs1=5, imm=0),
+            e("add", rd=4, rs1=0, rs2=0),  # a load into x0 must not be forwarded either
+        ),
+        data={DATA: 0x1234_5678},
+        expect={1: 0, 2: 0, 3: 0, 4: 0},
+    )
+)
+CASES.append(
+    Case(
+        "hazard_forwarding_distances",
+        program(
+            e("addi", rd=1, imm=10),
+            e("addi", rd=2, rs1=1, imm=1),  # x1 written 1 back: EX/MEM -> 11
+            e("addi", rd=3, rs1=1, imm=2),  # x1 written 2 back: MEM/WB -> 12
+            e("addi", rd=4, rs1=1, imm=3),  # x1 written 3 back: write-before-read -> 13
+            e("add", rd=5, rs1=3, rs2=2),  # x3 2 back (MEM/WB), x2 3 back (bypass) -> 23
+            e("sub", rd=6, rs1=4, rs2=5),  # x4 2 back, x5 1 back on rs2 (EX/MEM) -> 13 - 23
+        ),
+        expect={2: 11, 3: 12, 4: 13, 5: 23, 6: 0xFFFF_FFF6},
+    )
+)
+CASES.append(
+    Case(
+        "hazard_forwarding_newest_wins",  # x1 in both EX/MEM and MEM/WB: take the newer one
+        program(
+            e("addi", rd=1, imm=1),
+            e("addi", rd=1, imm=2),
+            e("add", rd=2, rs1=1, rs2=1),  # must be 2 + 2, not 1 + 1 or 1 + 2
+            e("addi", rd=3, imm=5),
+            e("addi", rd=3, rs1=3, imm=1),  # 6, depends on the previous one
+            e("add", rd=4, rs1=0, rs2=3),  # rs2: newest x3 = 6
+        ),
+        expect={1: 2, 2: 4, 3: 6, 4: 6},
+    )
+)
+CASES.append(
+    Case(
+        "hazard_load_use",  # load result used by the very next instruction, every operand kind
+        program(
+            li(1, DATA),
+            e("lw", rd=2, rs1=1, imm=0),
+            e("add", rd=3, rs1=2, rs2=0),  # rs1 load-use -> 7
+            e("lw", rd=4, rs1=1, imm=4),
+            e("add", rd=5, rs1=0, rs2=4),  # rs2 load-use -> 9
+            e("lw", rd=6, rs1=1, imm=0),
+            e("sw", rs1=1, rs2=6, imm=8),  # store data from the load -> mem[DATA+8] = 7
+            e("lw", rd=7, rs1=1, imm=12),
+            e("lw", rd=8, rs1=7, imm=0),  # load address from the load (pointer chasing) -> 7
+            e("lw", rd=9, rs1=1, imm=4),
+            e("beq", rs1=9, rs2=5, imm=8),  # branch on the load: 9 == 9, taken
+            e("addi", rd=10, imm=1),  # skipped
+            e("lw", rd=11, rs1=1, imm=8),
+            e("lw", rd=12, rs1=1, imm=8),  # rd 11 is not read: no stall needed, still correct
+            e("add", rd=13, rs1=11, rs2=12),  # 7 + 7
+        ),
+        data={DATA: 7, DATA + 4: 9, DATA + 12: DATA},
+        expect={3: 7, 5: 9, 6: 7, 8: 7, 10: 0, 13: 14},
+    )
+)
+CASES.append(
+    Case(
+        "hazard_branch_and_jump_flush",  # wrong-path instructions after a redirect must vanish
+        program(
+            li(7, DATA),  # 0
+            e("addi", rd=1, imm=3),  # 4
+            e("addi", rd=2, imm=3),  # 8
+            e("beq", rs1=1, rs2=2, imm=12),  # 12: operands forwarded; taken -> 24
+            e("addi", rd=10, imm=1),  # 16: wrong path
+            e("sw", rs1=7, rs2=1, imm=0),  # 20: wrong path, must not write memory
+            e("jal", rd=3, imm=12),  # 24: -> 36, x3 = 28
+            e("addi", rd=11, imm=1),  # 28: wrong path
+            e("addi", rd=12, imm=1),  # 32: wrong path
+            e("auipc", rd=4, imm=0),  # 36: x4 = 36
+            e("jalr", rd=5, rs1=4, imm=16),  # 40: rs1 forwarded from auipc -> 52, x5 = 44
+            e("addi", rd=13, imm=1),  # 44: wrong path
+            e("addi", rd=14, imm=1),  # 48: wrong path
+            e("addi", rd=6, imm=6),  # 52
+        ),
+        data={DATA: 0},
+        expect={10: 0, 11: 0, 12: 0, 13: 0, 14: 0, 3: 28, 5: 44, 6: 6},
+    )
+)
+
+
 # ---- One cocotb test per case ------------------------------------------------------------
 
 
-COVERAGE = Coverage()
+COVERAGE = new_coverage()
 
 
 async def run_case(dut, case: Case) -> None:
     harness = CoreHarness(dut, COVERAGE)
     harness.load(case.program, case.data)
     result = await harness.run(expect_trap=case.expect_trap)
-    COVERAGE.save(COVERAGE_DIR / "directed.json")
+    COVERAGE.save(coverage_path("directed"))
     for reg, value in case.expect.items():
         got = harness.read_reg(reg)
         assert got == value, f"x{reg} = 0x{got:08x}, expected 0x{value:08x}"
@@ -307,5 +411,6 @@ for _case in CASES:
     globals()[f"directed_{_case.name}"] = _make_test(_case)
 
 
-def test_core_single_directed():
-    run_cocotb("tb_top", CORE_SINGLE_SOURCES, "test_core_directed")
+@pytest.mark.parametrize("core", cores_under_test())
+def test_core_directed(core):
+    run_cocotb("tb_top", CORE_SOURCES, "test_core_directed", core)

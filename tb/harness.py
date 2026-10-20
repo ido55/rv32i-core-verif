@@ -7,6 +7,9 @@ Checking happens at two levels:
 
 Timing: the testbench samples the retire port on the FALLING clock edge, when all
 combinational logic has settled; the instruction then commits on the next rising edge.
+
+The core under test (single | pipe) is passed to the simulation as the plusarg +CORE=<core>
+by tests/rtl/cocotb_runner.py, and checked against the actual hierarchy.
 """
 
 from dataclasses import dataclass, fields
@@ -21,15 +24,37 @@ from model.iss import Iss, Memory, Retire
 from tb.coverage import Coverage
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-COVERAGE_DIR = REPO_ROOT / "build" / "coverage"  # one JSON file per test suite
+COVERAGE_DIR = REPO_ROOT / "build" / "coverage"  # <core>/<suite>.json
+RESULTS_DIR = REPO_ROOT / "build" / "results"  # <core>/<suite>.json: instruction/cycle counts
 MEM_WORDS = 4096  # must match tb_top's MEM_WORDS parameter
 MEM_BYTES = 4 * MEM_WORDS
 CLOCK_PERIOD_NS = 10
 
-CORE_SINGLE_SOURCES = [
+CORE_SOURCES = [
     "rtl/rv32i_pkg.sv", "rtl/alu.sv", "rtl/regfile.sv", "rtl/decoder.sv",
-    "rtl/branch_unit.sv", "rtl/lsu.sv", "rtl/core_single.sv", "tb/tb_top.sv",
+    "rtl/branch_unit.sv", "rtl/lsu.sv", "rtl/core_single.sv", "rtl/core_pipe.sv",
+    "tb/tb_top.sv",
 ]  # fmt: skip
+
+
+def core_name() -> str:
+    """The core this simulation was built with (+CORE=<core>, set by cocotb_runner).
+
+    Outside a simulation (pytest importing a test module) plusargs is None.
+    """
+    return (cocotb.plusargs or {}).get("CORE", "single")
+
+
+def new_coverage() -> Coverage:
+    return Coverage(pipelined=core_name() == "pipe")
+
+
+def coverage_path(suite: str) -> Path:
+    return COVERAGE_DIR / core_name() / f"{suite}.json"
+
+
+def results_path(suite: str) -> Path:
+    return RESULTS_DIR / core_name() / f"{suite}.json"
 
 
 class ScoreboardMismatch(AssertionError):
@@ -57,16 +82,34 @@ def format_retire(r: Retire) -> str:
 @dataclass
 class RunResult:
     retired: int  # instructions retired, including the final ECALL/EBREAK
-    cycles: int  # clock cycles from reset release to the halting instruction
+    cycles: int  # clock cycles from reset release until the halting instruction retires
     trace: list[Retire]
+    stall_cycles: int = 0  # pipelined core: cycles with a load-use stall
+    flushes: int = 0  # pipelined core: taken branches/jumps/halts that flushed IF and ID
+
+    @property
+    def cpi(self) -> float:
+        return self.cycles / self.retired
 
 
 class CoreHarness:
     def __init__(self, dut, coverage: Coverage | None = None):
         self.dut = dut
         self.coverage = coverage  # sampled on every retired instruction, if given
+        self.pipelined = core_name() == "pipe"
+        self.core = dut.u_core  # core_pipe or core_single, chosen when tb_top was built
         self.iss: Iss | None = None
         self._clock_started = False
+        self._check_core_identity()
+
+    def _check_core_identity(self) -> None:
+        """Fail loudly if +CORE does not match the core that was actually built."""
+        try:
+            self.core.stall_load_use  # noqa: B018 - only core_pipe has this signal
+            built = "pipe"
+        except AttributeError:
+            built = "single"
+        assert built == core_name(), f"+CORE={core_name()} but tb_top contains core_{built}"
 
     # ---- Setup ----------------------------------------------------------------------
 
@@ -111,7 +154,7 @@ class CoreHarness:
             self.coverage.reset_history()
 
         trace: list[Retire] = []
-        cycles = 0
+        cycles = stall_cycles = flushes = 0
         while True:
             await FallingEdge(dut.clk)
             cycles += 1
@@ -119,8 +162,13 @@ class CoreHarness:
                 raise ScoreboardMismatch(self._report(f"no halt within {max_cycles} cycles", trace))
             if dut.mem_fault.value:
                 raise ScoreboardMismatch(self._report("memory access outside imem/dmem", trace))
+            if self.pipelined:
+                stall_cycles += int(self.core.stall_load_use.value)
+                flushes += int(self.core.flush.value)
+                if self.coverage:
+                    self.coverage.sample_pipeline(self.core)
             if not dut.rvfi_valid.value:
-                continue
+                continue  # pipeline bubble (or still filling): nothing retires this cycle
 
             if dut.rvfi_trap.value:
                 if expect_trap:
@@ -145,7 +193,13 @@ class CoreHarness:
         assert dut.halted.value == 1 and dut.rvfi_valid.value == 0, "core did not halt"
 
         self._check_final_state()
-        return RunResult(retired=len(trace) + int(expect_trap), cycles=cycles, trace=trace)
+        return RunResult(
+            retired=len(trace) + int(expect_trap),
+            cycles=cycles,
+            trace=trace,
+            stall_cycles=stall_cycles,
+            flushes=flushes,
+        )
 
     # ---- Checking -------------------------------------------------------------------
 
@@ -196,7 +250,7 @@ class CoreHarness:
         """Read an architectural register straight from the RTL register file."""
         if reg == 0:
             return 0
-        return int(self.dut.u_core.u_regfile.regs_q[reg].value)
+        return int(self.core.u_regfile.regs_q[reg].value)
 
     @staticmethod
     def _report(message: str, trace: list[Retire], history: int = 8) -> str:
