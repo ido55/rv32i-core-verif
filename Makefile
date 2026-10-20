@@ -19,7 +19,7 @@ LINT_tb_top      := $(COMMON_SRCS) rtl/core_single.sv rtl/core_pipe.sv tb/tb_top
 LINT_TOPS        := alu regfile core_single core_pipe tb_top
 
 .PHONY: help venv lint lint-py lint-rtl format test test-model test-rtl test-random coverage cpi \
-        docker-test clean
+        mutation docker-test clean
 
 help:
 	@echo "make venv         create .venv and install pinned Python deps"
@@ -31,6 +31,7 @@ help:
 	@echo "make test-random  random programs only (SEEDS=<count> SEED_START=<first seed>)"
 	@echo "make coverage     functional coverage report from the last test run"
 	@echo "make cpi          CPI of the C programs on both cores, from the last test run"
+	@echo "make mutation     inject 7 pipeline bugs one at a time, count failing tests (~5 min)"
 	@echo "make docker-test  build the Docker image and run lint + tests in it"
 	@echo "make clean        remove build output"
 
@@ -74,6 +75,10 @@ coverage:
 
 cpi:
 	$(PYTHON) -m tb.cpi_report
+
+# Not part of `make test` (takes minutes): proves the tests catch injected pipeline bugs.
+mutation:
+	$(PYTHON) tools/mutation_analysis.py
 
 docker-test:
 	docker build -t $(IMAGE) .
