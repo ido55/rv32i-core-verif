@@ -126,8 +126,15 @@ module decoder
       default: ctrl.illegal = 1'b1;
     endcase
 
+    // Which source registers are really read. In LUI/AUIPC/JAL those bits are part of
+    // the immediate; a pipeline must not treat them as a dependency.
+    ctrl.uses_rs1 = opcode inside {OPC_JALR, OPC_BRANCH, OPC_LOAD, OPC_STORE, OPC_OP_IMM, OPC_OP};
+    ctrl.uses_rs2 = opcode inside {OPC_BRANCH, OPC_STORE, OPC_OP};
+
     // An illegal instruction must not change any state.
     if (ctrl.illegal) begin
+      ctrl.uses_rs1  = 1'b0;
+      ctrl.uses_rs2  = 1'b0;
       ctrl.reg_write = 1'b0;
       ctrl.mem_read  = 1'b0;
       ctrl.mem_write = 1'b0;

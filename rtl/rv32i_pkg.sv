@@ -67,6 +67,8 @@ package rv32i_pkg;
     logic [4:0]  rd;
     logic [4:0]  rs1;
     logic [4:0]  rs2;
+    logic        uses_rs1;   // the instruction really reads rs1 (for hazard detection)
+    logic        uses_rs2;   // the instruction really reads rs2
     logic [2:0]  funct3;     // branch condition / load-store width
     logic [31:0] imm;        // already sign-extended and shifted for its format
     alu_op_e     alu_op;
