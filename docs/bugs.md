@@ -55,4 +55,18 @@ Each mutation was applied to a clean tree, the tests were run, and the change wa
 ```bash
 make test-random CORE=pipe SEED_START=<seed> SEEDS=1          # rerun exactly one program
 make test-random CORE=pipe SEED_START=<seed> SEEDS=1 WAVES=1  # plus sim_build/tb_top_pipe/dump.vcd
+gtkwave sim_build/tb_top_pipe/dump.vcd                        # every signal
 ```
+
+`make waveform` does this end to end for the "No load-use stall" mutation above. It injects
+the bug, runs `directed_hazard_load_use` with a VCD dump, restores the RTL, and renders
+the failing cycles to `docs/img/failing_waveform.png`, the image shown in the README. The
+scoreboard reports:
+
+```
+retire #2 mismatch at pc=0x00000008: add x3, x2, x0
+  rd_wdata   core=0x00002000  model=0x00000007
+```
+
+With no stall, `add` is in EX while `lw x2` is in MEM, so EX/MEM forwarding supplies the
+load's address (0x2000) instead of its data (7).

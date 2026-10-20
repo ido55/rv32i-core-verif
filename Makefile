@@ -19,7 +19,7 @@ LINT_tb_top      := $(COMMON_SRCS) rtl/core_single.sv rtl/core_pipe.sv tb/tb_top
 LINT_TOPS        := alu regfile core_single core_pipe tb_top
 
 .PHONY: help venv lint lint-py lint-rtl format test test-model test-rtl test-random coverage cpi \
-        mutation docker-test clean
+        mutation synth waveform plots test-report results docker-test clean
 
 help:
 	@echo "make venv         create .venv and install pinned Python deps"
@@ -32,6 +32,11 @@ help:
 	@echo "make coverage     functional coverage report from the last test run"
 	@echo "make cpi          CPI of the C programs on both cores, from the last test run"
 	@echo "make mutation     inject 7 pipeline bugs one at a time, count failing tests (~5 min)"
+	@echo "make synth        Yosys resource counts of both cores (needs sv2v: tools/install_sv2v.sh)"
+	@echo "make waveform     docs/img/failing_waveform.png: a failing test on an injected bug"
+	@echo "make plots        docs/img/*.png CPI and coverage plots, from the last test run"
+	@echo "make test-report  pass counts of the last test run"
+	@echo "make results      regenerate every number and plot in the README (~10 min)"
 	@echo "make docker-test  build the Docker image and run lint + tests in it"
 	@echo "make clean        remove build output"
 
@@ -61,7 +66,7 @@ format:
 test: test-model test-rtl
 
 test-model:
-	$(PYTHON) -m pytest tests/model
+	$(PYTHON) -m pytest tests/model $(PYTEST_ARGS)
 
 test-rtl:
 	$(PYTHON) -m pytest tests/rtl
@@ -78,7 +83,33 @@ cpi:
 
 # Not part of `make test` (takes minutes): proves the tests catch injected pipeline bugs.
 mutation:
-	$(PYTHON) tools/mutation_analysis.py
+	$(PYTHON) -m tools.mutation_analysis
+
+synth:
+	$(PYTHON) -m tools.synth_report
+
+waveform:
+	$(PYTHON) -m tools.failing_waveform
+
+plots:
+	$(PYTHON) -m tools.plot_results
+
+test-report:
+	$(PYTHON) -m tools.test_report
+
+# Every number and plot in the README, from a clean tree. The bug-injecting steps run
+# first, so the test results that follow (and test-report) come from the unmodified RTL.
+results:
+	$(MAKE) clean
+	$(MAKE) synth
+	$(MAKE) mutation
+	$(MAKE) waveform
+	$(MAKE) test-model PYTEST_ARGS=--junitxml=build/results/model_tests.xml
+	$(MAKE) test-rtl
+	$(MAKE) test-report
+	$(MAKE) coverage
+	$(MAKE) cpi
+	$(MAKE) plots
 
 docker-test:
 	docker build -t $(IMAGE) .
