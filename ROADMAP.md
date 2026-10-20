@@ -18,7 +18,7 @@ by a minimal custom test environment.
 
 | Topic | Decision | Why |
 |---|---|---|
-| Memories | Separate instruction and data memory (Harvard), as SV arrays in a testbench wrapper `tb_top.sv`, loaded with `$readmemh` | Single-cycle core needs combinational reads; keeps the core itself synthesizable without memories |
+| Memories | Separate instruction and data memory (Harvard), as SV arrays in a testbench wrapper `tb_top.sv`, loaded by cocotb | Single-cycle core needs combinational reads; keeps the core itself synthesizable without memories |
 | Checking | Core exposes a **retire port** (valid, pc, insn, rd, rd_wdata, mem addr/wdata/wmask), modeled on RISC-V Formal Interface (RVFI) | Scoreboard checks every retired instruction against the ISS, so a bug shows up on the exact instruction, not 1000 cycles later |
 | Golden model | Own Python ISS (`model/`), validated independently with pytest and the official riscv-tests | Golden model must itself be trusted ("who verifies the verifier?") |
 | Program build | `riscv64-unknown-elf-gcc -march=rv32i -mabi=ilp32` for riscv-tests and C programs; a Python **instruction encoder** for directed and random tests | Toolchain is available, so no hand-written assembler is needed; the encoder is ~100 lines and lets tests build exact instruction streams |
@@ -95,7 +95,9 @@ by a minimal custom test environment.
 
 **Build:**
 - Yosys script: `synth -top core_pipe` (generic cells) and the same for `core_single`; cell/flop counts table.
-- One failing-test waveform: re-inject a bug logged in `docs/bugs.md` on a throwaway branch, dump FST, render a screenshot of the failing cycles for the README.
+  Also `synth_xilinx` for 7-series LUT/FF counts. Yosys 0.33 cannot parse parts of the SV used, so sv2v converts first.
+- One failing-test waveform: `make waveform` injects a bug from the mutation table in `docs/bugs.md`
+  (instead of a throwaway branch), dumps a VCD, restores the RTL and renders the failing cycles to a PNG.
 - `make results` regenerates every number in the README (pass rate, coverage %, CPI, cell counts) and the plots (matplotlib, added here and justified in the PR).
 - Final README: motivation, Mermaid architecture diagram, copy-paste commands, results tables + plots, design decisions and tradeoffs, limitations and next steps, CI badge.
 - `RESUME_BULLETS.md`: 3–4 bullets using only measured numbers.
