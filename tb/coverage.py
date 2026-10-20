@@ -13,6 +13,11 @@ Coverpoints:
   imm_sign     negative / positive immediates for I, S, B and J formats (8)
   raw_hazard   rs1/rs2 reads a register written 1, 2 or 3 instructions earlier,
                and a load result used by the very next instruction (7)
+
+Pipelined core only, sampled every clock cycle from core_pipe's hazard logic:
+  pipeline     each forwarding path per operand (EX/MEM, MEM/WB, both at once -> newest
+               wins), write-before-read bypass per operand, load-use stall, and flushes
+               caused by a taken branch, JAL, JALR and ECALL/EBREAK/illegal (13)
 """
 
 import json
@@ -45,9 +50,23 @@ COVERPOINTS: dict[str, list[str]] = {
 }
 
 
+PIPELINE_BINS = [
+    "fwd_rs1_exmem", "fwd_rs1_memwb", "fwd_rs1_double",
+    "fwd_rs2_exmem", "fwd_rs2_memwb", "fwd_rs2_double",
+    "wb_bypass_rs1", "wb_bypass_rs2",
+    "stall_load_use",
+    "flush_branch", "flush_jal", "flush_jalr", "flush_halt",
+]  # fmt: skip
+
+FWD_EXMEM, FWD_MEMWB = 1, 2  # values of core_pipe's fwd_sel_e
+
+
 class Coverage:
-    def __init__(self) -> None:
-        self.bins = {point: dict.fromkeys(names, 0) for point, names in COVERPOINTS.items()}
+    def __init__(self, pipelined: bool = False) -> None:
+        points = dict(COVERPOINTS)
+        if pipelined:
+            points["pipeline"] = PIPELINE_BINS
+        self.bins = {point: dict.fromkeys(names, 0) for point, names in points.items()}
         self._history: list[Instr] = []  # last 3 retired instructions, oldest first
 
     def hit(self, point: str, name: str) -> None:
@@ -102,10 +121,34 @@ class Coverage:
                         self.hit("raw_hazard", "load_use")
                     break
 
+    def sample_pipeline(self, core) -> None:
+        """Sample core_pipe's hazard signals (a cocotb handle to the core) for one cycle."""
+        for operand, sel in (("rs1", core.fwd_a_sel), ("rs2", core.fwd_b_sel)):
+            value = int(sel.value)
+            if value == FWD_EXMEM:
+                self.hit("pipeline", f"fwd_{operand}_exmem")
+            elif value == FWD_MEMWB:
+                self.hit("pipeline", f"fwd_{operand}_memwb")
+        signals = {
+            "fwd_rs1_double": core.cov_fwd_a_double,
+            "fwd_rs2_double": core.cov_fwd_b_double,
+            "wb_bypass_rs1": core.cov_wb_bypass_rs1,
+            "wb_bypass_rs2": core.cov_wb_bypass_rs2,
+            "stall_load_use": core.stall_load_use,
+            "flush_branch": core.cov_flush_branch,
+            "flush_jal": core.cov_flush_jal,
+            "flush_jalr": core.cov_flush_jalr,
+            "flush_halt": core.cov_flush_halt,
+        }
+        for name, signal in signals.items():
+            if signal.value == 1:
+                self.hit("pipeline", name)
+
     # ---- Reporting --------------------------------------------------------------------
 
     def merge(self, other: "Coverage") -> None:
         for point, bins in other.bins.items():
+            self.bins.setdefault(point, dict.fromkeys(bins, 0))
             for name, count in bins.items():
                 self.bins[point][name] += count
 
@@ -130,8 +173,9 @@ class Coverage:
 
     @classmethod
     def load(cls, path: Path) -> "Coverage":
-        cov = cls()
-        for point, bins in json.loads(path.read_text()).items():
+        data = json.loads(path.read_text())
+        cov = cls(pipelined="pipeline" in data)
+        for point, bins in data.items():
             for name, count in bins.items():
                 cov.bins[point][name] += count
         return cov

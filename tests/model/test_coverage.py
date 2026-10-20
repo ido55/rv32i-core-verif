@@ -22,6 +22,9 @@ def hits(cov: Coverage) -> set[str]:
 
 def test_bin_counts():
     assert sum(len(bins) for bins in COVERPOINTS.values()) == 90
+    pipelined = Coverage(pipelined=True)
+    assert len(pipelined.bins["pipeline"]) == 13
+    assert "pipeline" not in Coverage().bins  # the single-cycle core has no hazard logic
 
 
 def test_branch_taken_and_not_taken():
