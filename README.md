@@ -15,7 +15,7 @@ analysis. Both are also synthesized with Yosys.
 | Functional coverage | **103 / 103** bins (pipeline), **90 / 90** (single-cycle) |
 | Injected pipeline bugs caught | **7 / 7**, by every suite type |
 | CPI, pipeline (fibonacci / bubble sort) | **1.159 / 1.595** |
-| Xilinx 7-series LUTs / flip-flops (pipeline) | **2,155 / 1,681** |
+| Synthesis, pipeline (Yosys, before place-and-route) | **7,502** generic cells, including **1,681** flip-flops |
 
 ## Documentation
 
@@ -130,7 +130,7 @@ Each table also names the narrower command that prints it.
 | `test_alu_rtl`, `test_regfile_rtl` | ALU (edge pairs + 1,000 random pairs per op), register file (2,000 random cycles) | 7 / 7 (shared blocks) | |
 | `test_core_directed` | every RV32I instruction with edge cases, x0, halt, illegal trap, 5 hazard tests | 50 / 50 | 50 / 50 |
 | `test_core_programs` | **official rv32ui riscv-tests** (40 of 42) + fibonacci + bubble sort | 42 / 42 | 42 / 42 |
-| `test_core_random` | constrained-random programs, seeds 1-50 (~360 instructions each) | 50 / 50 | 50 / 50 |
+| `test_core_random` | constrained-random programs, seeds 1-50 (289–496 instructions each, mean 382.8) | 50 / 50 | 50 / 50 |
 
 **Excluded riscv-tests:** `fence_i` (self-modifying code) and `ma_data` (misaligned
 access), both outside this design's scope.
@@ -222,12 +222,13 @@ The bugs that *were* found (in the verification setup) are logged in
 
 ### Synthesis (`make synth`)
 
-Yosys 0.33. The memories sit outside the cores, so they aren't counted.
+Yosys 0.33. The memories sit outside the cores, so they aren't counted. These are counts
+after synthesis, **before place-and-route**.
 
-| Core | Generic cells | Flip-flops | 7-series LUTs | 7-series FFs | CARRY4 | MUXF7/8 |
-|---|---|---|---|---|---|---|
-| single | 6,438 | 1,057 | 1,946 | 1,037 | 50 | 254 |
-| pipe | 7,502 | 1,681 | 2,155 | 1,681 | 58 | 511 |
+| Core | Generic cells | Flip-flops | 7-series LUTs | 7-series INV | 7-series FFs | CARRY4 | MUXF7/8 |
+|---|---|---|---|---|---|---|---|
+| single | 6,438 | 1,057 | 1,946 | 1,071 | 1,037 | 50 | 254 |
+| pipe | 7,502 | 1,681 | 2,155 | 1,328 | 1,681 | 58 | 511 |
 
 **What the numbers mean:**
 - **Flows:** "Generic" is technology-independent `synth -flatten`; "7-series" is
@@ -237,6 +238,17 @@ Yosys 0.33. The memories sit outside the cores, so they aren't counted.
 - **The pipeline's cost:** 624 more flip-flops for the pipeline registers, +17% generic
   cells, +11% LUTs.
 - **No warnings:** `make synth` fails on any Yosys warning or inferred latch. It runs in CI.
+
+**Read the 7-series columns with three caveats:**
+- **Inverters aren't LUTs.** "LUTs" counts only `LUT1`–`LUT6` cells. `synth_xilinx` also leaves
+  the `INV` cells shown separately. Place-and-route (e.g. Vivado) typically absorbs many of
+  them into neighbouring LUTs or flip-flop inputs, so the final LUT count would be somewhere
+  between the LUT column and LUTs + INV. It hasn't been measured.
+- **The retire port is included.** Each core is synthesized as the top level, so its 208-bit
+  retire port (`rvfi_*`) and the logic that drives it are counted. A product core would
+  drop them.
+- **The two flows disagree slightly on the single core's flip-flops** (1,057 vs 1,037). The
+  difference hasn't been investigated.
 
 ## Quick start
 
