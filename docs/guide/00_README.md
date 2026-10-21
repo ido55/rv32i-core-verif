@@ -129,8 +129,7 @@ knowing before an interview:
 
 | Gap | Where |
 |---|---|
-| The README's "7-series LUTs" exclude the 1,071 / 1,328 `INV` cells that `synth_xilinx` creates, and include the 208-bit retire port | [10](10_results.md) |
-| The README says random programs are "~360 instructions each"; measured mean is 382.8 (range 289–496) | [07](07_verification.md), [10](10_results.md) |
+| Synthesis counts are pre-place-and-route: LUTs and the 1,071 / 1,328 `INV` cells are reported separately, and the 208-bit retire port is included | [10](10_results.md) |
 | The coverage model has no cross bins, so random coverage saturates after 3 seeds while bug detection keeps improving | [07](07_verification.md) |
 | No timing analysis, so the pipeline's speed advantage is not measured | [10](10_results.md) |
 | The two real bugs have no before/after commits: both were fixed before being committed | [08](08_bugs_found.md) |

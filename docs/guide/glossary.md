@@ -82,7 +82,7 @@ below, read the two-line definition, then follow the chapter link if you need mo
 | **imem / dmem** | instruction memory and data memory: two 16 KiB arrays in `tb/tb_top.sv`, outside the cores | [04](04_single_cycle_core.md) |
 | **Immediate** | a constant encoded inside the instruction | [02](02_riscv_basics.md) |
 | **`inside`** | SystemVerilog set-membership operator | [03](03_systemverilog_basics.md) |
-| **INV** | Xilinx inverter primitive; not counted in the README's LUT column | [10](10_results.md) |
+| **INV** | Xilinx inverter primitive; reported separately from the LUT count (`make synth`) | [10](10_results.md) |
 | **ISA** | instruction set architecture: the contract between software and CPU | [02](02_riscv_basics.md) |
 | **ISS** | instruction-set simulator: executes instructions one at a time in software (`model/iss.py`) | [06](06_golden_model.md) |
 | **J-type** | instruction format of JAL; 21-bit even offset | [02](02_riscv_basics.md) |

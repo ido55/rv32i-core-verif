@@ -299,7 +299,7 @@ who reads that signal?"*
 - **Contents.**
   - `SEEDS`, `SEED_START` from the environment (`22-23`);
   - `run_seed` (`31-38`) and `save_closure` (`41-47`), which writes
-    `random_coverage.json`;
+    `random_coverage.json` (instructions and bins hit per seed);
   - entry point (`62-64`).
 
 ### `tests/model/*.py`
@@ -317,10 +317,10 @@ who reads that signal?"*
 | `tools/mutations.py` | the 7 injectable bugs, plus safe restore | `Mutation` (`23-27`), `MUTATIONS` (`30-53`), `protected_outputs()` (`57-74`), `inject()` (`77-80`) | temporarily `rtl/core_pipe.sv` |
 | `tools/mutation_analysis.py` | `make mutation` | `run_suite` (`28-40`), `main` (`43-60`) | `build/results/mutation.json` |
 | `tools/failing_waveform.py` | `make waveform` | `run_failing_test` (`37-51`), `read_vcd` (`54-87`), `stage_text` (`99-107`), `draw` (`150-203`) | `docs/img/failing_waveform.png` |
-| `tools/synth_report.py` | `make synth` | `find_sv2v` (`26-31`), `synthesize` (`39-58`), `summarize` (`61-71`) | `build/synth/*`, `build/results/synth.json` |
+| `tools/synth_report.py` | `make synth` | `find_sv2v` (`26-31`), `synthesize` (`39-58`), `summarize` (`61-72`) | `build/synth/*`, `build/results/synth.json` |
 | `tools/install_sv2v.sh` | install the pinned sv2v | version + SHA-256 (`10-11`) | `~/.local/bin/sv2v` |
 | `tools/plot_results.py` | `make plots` | `cpi_breakdown` (`31-63`), `coverage_closure` (`66-80`) | `docs/img/cpi_breakdown.png`, `coverage_closure.png` |
-| `tools/test_report.py` | `make test-report` | `count` (`19-26`), `main` (`29-47`) | stdout |
+| `tools/test_report.py` | `make test-report` | `count` (`21-28`), `random_program_lengths` (`31-38`), `main` (`41-61`) | stdout |
 
 ---
 
@@ -343,7 +343,7 @@ who reads that signal?"*
 ## Known gaps
 
 - **`tools/plot_results.py` and `tools/test_report.py` import `REPO_ROOT` from
-  `tools/mutations.py`** (`tools/plot_results.py:18`, `tools/test_report.py:13`). That's a
+  `tools/mutations.py`** (`tools/plot_results.py:18`, `tools/test_report.py:14`). That's a
   convenient import, but it makes two unrelated tools depend on the mutation module. A
   small shared `paths` module would be cleaner.
 - **`tools/synth_report.py:18` and `tb/harness.py:26` compute `REPO_ROOT` separately.** It

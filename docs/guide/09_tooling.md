@@ -149,7 +149,7 @@ loader hardware at all.
   (`tests/rtl/cocotb_runner.py:31-37`).
 - **The results file has a strange name under pytest:** `sim_build/<build>/<pytest test
   id>.None`, for example `test_core_directed[pipe].None` (`CLAUDE.md:83`). The test report
-  and the mutation tool read those files (`tools/test_report.py:33`,
+  and the mutation tool read those files (`tools/test_report.py:45`,
   `tools/mutation_analysis.py:24-25`).
 - **Outside a simulation, `cocotb.plusargs` is `None`.** pytest imports the test modules
   too, outside any simulator, so `core_name()` uses `cocotb.plusargs or {}`
