@@ -68,6 +68,7 @@ def summarize(counts: dict[str, dict[str, int]]) -> dict[str, int]:
         "xilinx_flops": sum(n for name, n in xilinx.items() if name.startswith("FD")),
         "xilinx_carry4": xilinx.get("CARRY4", 0),
         "xilinx_muxf": xilinx.get("MUXF7", 0) + xilinx.get("MUXF8", 0),
+        "xilinx_inv": xilinx.get("INV", 0),  # not LUTs: inverters, often absorbed in P&R
     }
 
 
@@ -78,12 +79,16 @@ def main() -> int:
     RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
     RESULTS_FILE.write_text(json.dumps(results, indent=2))
 
-    print("| Core | Generic cells | Flip-flops | 7-series LUTs | 7-series FFs | CARRY4 | MUXF7/8 |")
-    print("|---|---|---|---|---|---|---|")
+    print(
+        "| Core | Generic cells | Flip-flops | 7-series LUTs | 7-series INV | 7-series FFs "
+        "| CARRY4 | MUXF7/8 |"
+    )
+    print("|---|---|---|---|---|---|---|---|")
     for core, r in results.items():
         print(
             f"| {core} | {r['generic_cells']:,} | {r['generic_flops']:,} | {r['xilinx_luts']:,} "
-            f"| {r['xilinx_flops']:,} | {r['xilinx_carry4']} | {r['xilinx_muxf']} |"
+            f"| {r['xilinx_inv']:,} | {r['xilinx_flops']:,} | {r['xilinx_carry4']} "
+            f"| {r['xilinx_muxf']} |"
         )
     return 0
 
