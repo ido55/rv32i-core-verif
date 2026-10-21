@@ -24,7 +24,7 @@ SEED_START = int(os.environ.get("SEED_START") or 1)
 MAX_CYCLES = 50_000
 
 COVERAGE = new_coverage()
-# Coverage closure curve: total bins hit after each seed (plotted by `make plots`).
+# Per seed: instructions retired, and total bins hit so far (`make plots`, `make test-report`).
 CLOSURE: list[dict[str, int]] = []
 
 
@@ -34,14 +34,14 @@ async def run_seed(dut, seed: int) -> None:
     harness.load(program.words, program.data)
     result = await harness.run(max_cycles=MAX_CYCLES)
     COVERAGE.save(coverage_path("random"))
-    save_closure(seed)
+    save_closure(seed, result.retired)
     dut._log.info("seed %d: %d instructions, %d cycles", seed, result.retired, result.cycles)
 
 
-def save_closure(seed: int) -> None:
+def save_closure(seed: int, retired: int) -> None:
     summary = COVERAGE.summary().values()
     hit, total = sum(h for h, _ in summary), sum(t for _, t in summary)
-    CLOSURE.append({"seed": seed, "bins_hit": hit, "bins_total": total})
+    CLOSURE.append({"seed": seed, "instructions": retired, "bins_hit": hit, "bins_total": total})
     path = results_path("random_coverage")
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(CLOSURE, indent=1))

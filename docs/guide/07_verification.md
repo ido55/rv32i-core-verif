@@ -245,7 +245,8 @@ program comes from a **block** with one constraint that keeps it legal
 
 A program has 150 blocks plus the register setup (`tb/random_program.py:62,190-198`).
 Measured over seeds 1–50, programs retire between 289 and 496 instructions, with a mean
-of 382.8.
+of 382.8. `make test-report` prints this from the run's per-seed record
+(`tools/test_report.py:31-38`).
 
 **Two guarantees:**
 - **Reproducibility.** The same seed always gives the same program
@@ -387,8 +388,6 @@ Measured with `make mutation` (failing / run):
 - **cocotb's own seed is fixed at 1 by default** (`tests/rtl/cocotb_runner.py:57`). The ALU
   and register-file random tests therefore run the same operands on every CI run. That's
   reproducible, but not exploring.
-- **The README's "~360 instructions each" for random programs is off.** Measured over seeds
-  1–50 (the CI seeds), the mean is 382.8 retired instructions, ranging from 289 to 496.
 - **Two stale comments:**
   - `tests/rtl/test_core_directed.py:1` says "for the single-cycle core";
   - `CLAUDE.md:43` says the waveform is at `sim_build/<top>/dump.vcd`. With two cores the

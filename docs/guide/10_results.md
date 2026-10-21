@@ -63,7 +63,8 @@ Even so, the real tests run last, so nothing reported can come from a mutated de
 
 | README number | Measures | Produced by | Reproduce |
 |---|---|---|---|
-| **429 / 429** model tests | pass count of `pytest tests/model` | JUnit XML from pytest, counted by `tools/test_report.py:19-26` | `make test-model` |
+| **429 / 429** model tests | pass count of `pytest tests/model` | JUnit XML from pytest, counted by `tools/test_report.py:21-28` | `make test-model` |
+| **289–496** instructions per random program, **mean 382.8** | instructions retired per seed (seeds 1–50), same on both cores | recorded per seed by `tests/rtl/test_core_random.py:41-47`, summarised by `tools/test_report.py:31-38` | `make test-rtl` then `make test-report` |
 | **7 / 7** block tests (3 ALU + 4 regfile) | cocotb tests in `tests/rtl/test_alu.py` and `test_regfile.py` | `sim_build/alu/test_alu_rtl.None`, `sim_build/regfile/test_regfile_rtl.None` | `make test-rtl` then `make test-report` |
 | **50 / 50** directed, per core | `test_core_directed` cocotb tests | `sim_build/tb_top_<core>/test_core_directed[<core>].None` | same |
 | **42 / 42** programs, per core | 40 riscv-tests + 2 C programs | `.../test_core_programs[<core>].None` | same |
@@ -168,16 +169,17 @@ The table counts failing **cocotb tests** by searching the JUnit file for `<fail
 
 Reproduce with `make synth`. It needs sv2v; see chapter 09.
 
-| Core | Generic cells | Flip-flops | 7-series LUTs | 7-series FFs | CARRY4 | MUXF7/8 |
-|---|---|---|---|---|---|---|
-| single | 6,438 | 1,057 | 1,946 | 1,037 | 50 | 254 |
-| pipe | 7,502 | 1,681 | 2,155 | 1,681 | 58 | 511 |
+| Core | Generic cells | Flip-flops | 7-series LUTs | 7-series INV | 7-series FFs | CARRY4 | MUXF7/8 |
+|---|---|---|---|---|---|---|---|
+| single | 6,438 | 1,057 | 1,946 | 1,071 | 1,037 | 50 | 254 |
+| pipe | 7,502 | 1,681 | 2,155 | 1,328 | 1,681 | 58 | 511 |
 
-| Column | Computed as (`tools/synth_report.py:61-71`) | Meaning |
+| Column | Computed as (`tools/synth_report.py:61-72`) | Meaning |
 |---|---|---|
 | Generic cells | sum of all cells after `synth -flatten` | technology-independent gates and flip-flops |
 | Flip-flops | cells whose name contains `DFF` | single: 1,024 `$_SDFFCE_` (32 × 32: the register file) + 33 `$_SDFFE_`, which matches `pc_q` (32 bits) + `halted_q` (inferred from the widths, not traced in the netlist) |
 | 7-series LUTs | cells named `LUT1`…`LUT6` after `synth_xilinx` | look-up tables, the FPGA's logic blocks |
+| 7-series INV | cells named `INV` | inverters that `synth_xilinx` leaves as separate cells; place-and-route typically absorbs many into LUTs or flip-flop inputs |
 | 7-series FFs | cells named `FD*` | all `FDRE` here |
 | CARRY4 | fast carry chains | used by adders and comparators |
 | MUXF7/8 | wide multiplexers built from LUT pairs | single 254, pipe 511 |
@@ -195,8 +197,9 @@ Derived numbers in the README:
 
 - **These are counts after synthesis, not after FPGA place-and-route.** Vivado would
   optimise further.
-- **The Xilinx flow also creates inverter cells,** which the LUT column doesn't count:
-  1,071 `INV` cells for single and 1,328 for pipe. Section 9 explains.
+- **The Xilinx flow also creates inverter cells,** reported in their own column (1,071 for
+  single, 1,328 for pipe) rather than inside the LUT count. The post-implementation LUT
+  count would be somewhere between the LUT column and LUTs + INV. It hasn't been measured.
 - **The retire port is part of the synthesized core.** It adds 208 output bits, part of the
   309 `OBUF` cells. A product core would drop it.
 - **The two flows count different flip-flop totals for the single core** (1,057 vs 1,037),
@@ -204,24 +207,19 @@ Derived numbers in the README:
 
 ## 9. Known gaps
 
-- **`INV` cells are excluded from "7-series LUTs."** `tools/synth_report.py:67` counts only
-  cells whose names start with `LUT`. The Xilinx netlists also contain 1,071 (single) and
-  1,328 (pipe) `INV` primitives. In a real Vivado implementation many inverters are absorbed
-  into neighbouring LUTs or flip-flop inputs, so the true LUT usage after implementation is
-  unknown. The README's "2,155 LUTs" should be read as "LUT cells reported by
-  `synth_xilinx`, excluding inverters".
+- **No post-implementation LUT count.** `tools/synth_report.py:67` counts `LUT1`–`LUT6`, and
+  the `INV` cells are reported separately (`tools/synth_report.py:71`). How many inverters
+  survive place-and-route is unknown until the design is implemented (e.g. in Vivado).
+  This was originally a gap in the README too: the guide found it, and the README's
+  synthesis section now states it.
 - **The single core's flip-flop count differs between flows** (1,057 generic vs 1,037
   Xilinx). The cause wasn't investigated.
-- **The retire port and coverage signals inflate area.** The core is synthesized as the
-  top level, so all 309 output bits stay, including 208 bits of retire port. Its gating
-  logic is included in the counts.
+- **The retire port inflates area.** The core is synthesized as the top level, so all 309
+  output bits stay, including the 208-bit retire port and its gating logic.
 - **No timing.** Neither flow reports a clock frequency, so the speed benefit of pipelining
   isn't measured. Yosys's `ltp` command can give a logic-depth estimate, but the README
   doesn't report one: with the memories outside the core, the single-cycle core's critical
   path is split across the ports, so the comparison would mislead.
-- **"~360 instructions each" in the README's test table is inaccurate.** Over seeds 1–50,
-  random programs retire 289 to 496 instructions, mean 382.8 (measured with the ISS for
-  this guide).
 - **Run time of `make results`.** `make help` says ~10 min, the README says ~7 min, and the
   measured run took 406 s (`Makefile:39`).
 
@@ -243,8 +241,8 @@ Derived numbers in the README:
    (`Makefile:100-112`).
 3. 3,639 instructions + 4 fill + 496 stall cycles + 2 × 832 flush cycles = 5,803.
 4. Only cells named `LUT1`–`LUT6` in the `synth_xilinx` netlist
-   (`tools/synth_report.py:67`). `INV` cells (1,328 for pipe), I/O buffers and carry/mux
-   primitives are left out.
+   (`tools/synth_report.py:67`). `INV` cells (1,328 for pipe) are left out of it and
+   reported in their own column. I/O buffers and carry/mux primitives are left out too.
 5. Only CPI was measured. Pipelining pays off through a higher clock frequency, and no
    timing analysis was done.
 
